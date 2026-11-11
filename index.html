@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Судебный контроль — прототип</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=PT+Serif:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="search.css" />
+  <link rel="stylesheet" href="watch.css" />
+  <link rel="stylesheet" href="nav.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">IQ</span><span>LEGAL<br><b>CONTROL</b></span></div>
+      <nav>
+        <a class="active" href="#overview"><i>⌂</i> Поиск дела</a>
+        <a href="#watchlist"><i>◉</i> Наблюдение <span class="nav-badge" id="watchCount">0</span></a>
+      </nav>
+      <div class="side-bottom"><span class="sync-dot"></span> Синхронизация с Битрикс24<br><small>обновлено только что</small></div>
+    </aside>
+
+    <main>
+      <header>
+        <div><p class="eyebrow">СУДЕБНЫЕ ДЕЛА / КАД.АРБИТР</p><h1>Контроль требований суда</h1></div>
+        <div class="profile"><span class="avatar">АС</span><span>Алексей Смирнов<br><small>Юридический отдел</small></span></div>
+      </header>
+
+      <section class="source-card case-content">
+        <div class="source-title"><span class="bitrix">Б</span><div><b>Данные из Битрикс24</b><small id="bitrixDeal">Номер дела передан из сделки</small></div></div>
+        <div class="case-picker"><label for="caseInput">Номер дела</label><div><input id="caseInput" placeholder="например, А32-65024/2026" /><button id="searchBtn">Найти в КАД</button></div></div>
+        <div class="status"><span class="status-dot"></span><span id="syncStatus">Готово к запросу</span></div>
+      </section>
+      <section id="searchResults" class="search-results case-content" hidden></section>
+      <section id="watchlist" class="watchlist"><div class="section-title"><div><p class="eyebrow">НАБЛЮДАТЕЛЬНЫЙ ПУНКТ</p><h2>Дела под наблюдением</h2></div><span>Последняя информация из КАД</span></div><div class="watch-table-wrap"><table class="watch-table"><thead><tr><th>Дело</th><th>Суд</th><th>Последний акт</th><th>Заседание</th><th>Обновлено</th></tr></thead><tbody id="watchList"><tr><td colspan="5" class="empty-state">Пока нет дел под наблюдением.</td></tr></tbody></table></div></section>
+
+      <section id="overview" class="case-head case-content">
+        <div class="case-number"><p class="eyebrow">АРБИТРАЖНОЕ ДЕЛО</p><h2 id="caseNumber">А40-245678/2025</h2><p id="courtName">Арбитражный суд города Москвы</p></div>
+        <div class="case-tags"><span id="instanceName">Первая инстанция</span><span class="orange" id="caseState">Требуется действие</span><button id="watchBtn" class="watch-button">◉ Под наблюдение</button></div>
+      </section>
+
+      <section class="metrics case-content">
+        <div><p id="plaintiffLabel">Истец</p><b id="plaintiff">—</b></div><div><p id="respondentLabel">Ответчик</p><b id="respondent">—</b></div><div><p>Судья</p><b id="judge">—</b></div><div><p>Ближайшее заседание</p><b class="deadline" id="deadline">—</b></div>
+      </section>
+
+      <section id="documents" class="grid case-content">
+        <article class="decision-card">
+          <div class="card-top"><div><p class="eyebrow">ПОСЛЕДНИЙ СУДЕБНЫЙ АКТ</p><h3 id="actTitle">Ожидание запроса к КАД</h3></div><span class="date" id="actDate">—</span></div>
+          <div class="document-preview"><div class="paper"><div class="paper-line wide"></div><div class="paper-line"></div><div class="paper-line mid"></div><div class="paper-seal">АС</div></div><div><b id="pdfName">PDF не получен</b><p id="pdfMeta">После запроса будет доступна ссылка из КАД</p><a id="kadLink" target="_blank" href="https://kad.arbitr.ru/">Открыть источник в КАД ↗</a></div></div>
+          <div class="actions"><button class="secondary" id="previewBtn">⌕ Просмотреть</button><button class="primary" id="downloadBtn">↓ Скачать постановление</button></div>
+        </article>
+        <article class="summary-card">
+          <div class="ai-title"><span class="sparkle">✦</span><div><p class="eyebrow">AI-ВЫЖИМКА ИЗ ПОСТАНОВЛЕНИЯ</p><h3>Что важно сделать</h3></div></div>
+          <p class="summary-text" id="summaryText">Саммари появится после получения и разбора оригинального PDF судебного акта.</p>
+          <div class="ai-note">Сформировано из текста судебного акта · проверьте оригинал перед отправкой</div>
+        </article>
+      </section>
+
+      <section id="requirements" class="requirements case-content">
+        <div class="section-title"><div><p class="eyebrow">ЧЕК-ЛИСТ</p><h2>Документы, которые запросил суд</h2></div><span id="progress">0 из 5 готово</span></div>
+        <div id="requirementsList" class="requirement-list"></div>
+      </section>
+
+      <section id="history" class="timeline case-content"><p class="eyebrow">ИСТОРИЯ ДЕЛА</p><div id="historyList"></div></section>
+    </main>
+  </div>
+  <dialog id="previewDialog"><button class="close" id="closePreview">×</button><div class="modal-paper"><p id="modalCourt">АРБИТРАЖНЫЙ СУД ГОРОДА МОСКВЫ</p><h3>ОПРЕДЕЛЕНИЕ</h3><p id="modalAct">об истребовании доказательств</p><hr><p id="modalText">Суд предлагает ответчику представить документы, подтверждающие исполнение обязательств по договору, а также доказательства направления копий другой стороне.</p><p id="modalDeadline">Срок представления: до 18 июня 2025 года.</p></div></dialog>
+  <script src="app.js?v=16"></script>
+</body>
+</html>

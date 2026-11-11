@@ -1,0 +1,1 @@
+.sidebar nav a{transition:background-color .18s ease,color .18s ease,transform .18s ease}.sidebar nav a:hover{background:#214d3d;color:#fff;transform:translateX(2px)}.sidebar nav a.active{box-shadow:inset 3px 0 0 #73d5a2}
