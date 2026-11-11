@@ -4,6 +4,8 @@
 """
 
 import json
+import re
+import subprocess
 import sys
 import threading
 import time
@@ -17,13 +19,32 @@ sys.path.insert(0, str(PARSER_ROOT))
 
 import requests  # noqa: E402
 from src.api.documents_api import extract_documents_data, get_case_documents_page, read_cookies  # noqa: E402
+from src.browser.browser import KadBrowserClient  # noqa: E402
 from src.browser.case_searcher import CaseSearcher  # noqa: E402
+from src.settings import DEBUG_PORT  # noqa: E402
 
 HOST = "127.0.0.1"
 PORT = 4176
 CACHE_TTL_SECONDS = 15 * 60
 cache: dict[str, dict] = {}
 search_lock = threading.Lock()
+
+
+def stop_only_debug_listener(self) -> None:
+    """Исправляет небезопасную очистку порта в исходной библиотеке.
+
+    Исходный код ищет любое упоминание :9222 в netstat и может завершить
+    процесс, который лишь подключается к Chrome. Нам нужен только listener.
+    """
+    result = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, check=False)
+    pattern = re.compile(rf"^\s*TCP\s+127\.0\.0\.1:{DEBUG_PORT}\s+\S+\s+LISTENING\s+(\d+)", re.IGNORECASE)
+    for line in result.stdout.splitlines():
+        match = pattern.match(line)
+        if match:
+            subprocess.run(["taskkill", "/PID", match.group(1), "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+KadBrowserClient._kill_debug_port_processes = stop_only_debug_listener
 
 
 def get_documents(case_number: str, refresh: bool = False) -> dict:
