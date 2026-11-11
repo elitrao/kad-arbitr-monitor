@@ -1,12 +1,24 @@
-# Локальный прототип КАД
+# Контроль требований суда
 
-Установите ключ Parser API только в окружении локального сервера:
+Прототип для поиска арбитражного дела, загрузки судебного акта, извлечения списка документов и подготовки ИИ-выжимки.
 
-```powershell
-$env:PARSER_API_KEY = 'ваш_ключ'
-node server.mjs
-```
+## Развёртывание в Cloudflare Pages
 
-Интерфейс вызывает `/api/case`; backend использует `details_by_number`. Если в ответе КАД есть PDF URL, кнопка загрузки вызывает `pdf_download` и отдаёт исходный файл. Ключ в браузер не передаётся.
+Проект уже содержит Pages Function в `functions/api/[[path]].js`. Она обслуживает `/api/case`, `/api/pdf` и `/api/ai-requirements`; ключи остаются в Cloudflare и не попадают в браузер или GitHub.
 
-Саммари и перечень требований не строятся из метаданных. Следующий модуль: PDF → извлечение текста → LLM/правила с обязательными ссылками на страницы и фрагменты акта.
+1. В Cloudflare Dashboard откройте **Workers & Pages → Create application → Pages → Connect to Git**.
+2. Выберите репозиторий `elitrao/kad-arbitr-monitor`, branch `main`.
+3. В настройках сборки укажите **Framework preset: None**, **Build command: пусто**, **Build output directory: /**.
+4. После первого деплоя откройте **Settings → Environment variables → Add** и добавьте secrets для окружений Production и Preview:
+
+   - `PARSER_API_KEY` — ключ Parser API;
+   - `DEEPSEEK_API_KEY` — ключ DeepSeek;
+   - `DEEPSEEK_MODEL` — `deepseek-flash` (необязательно).
+
+5. Нажмите **Retry deployment**. Pages автоматически опубликует статику и API-функцию.
+
+PDF скачивается через защищённый `/api/pdf`, а текст PDF разбирается прямо в браузере через PDF.js. Поэтому Python-сервис на Cloudflare не требуется.
+
+## Локальный запуск
+
+Для локальной версии можно продолжить запускать `node server.mjs` и `python analyzer.py`, предварительно задав `PARSER_API_KEY` и `DEEPSEEK_API_KEY` в окружении.

@@ -69,8 +69,7 @@ function renderCase(data, refresh = true) {
 
 async function analyzePdf(pdfUrl) {
   try {
-    const response = await fetch(`/api/analyze?url=${encodeURIComponent(pdfUrl)}`); const analysis = await response.json();
-    if (!response.ok) throw new Error(analysis.error || 'Не удалось разобрать PDF');
+    const analysis = await extractRequirementsFromPdf(pdfUrl);
     if (!analysis.found) {
       $('requirementsList').innerHTML = '<div class="empty-state">В тексте акта не найден раздел «Должнику: в обязательном порядке представить:».</div>';
       $('progress').textContent = 'Требования не найдены'; return;
@@ -91,6 +90,28 @@ async function analyzePdf(pdfUrl) {
     $('requirementsList').innerHTML = `<div class="empty-state">${error.message}</div>`;
     $('progress').textContent = 'Ошибка разбора';
   }
+}
+
+async function extractRequirementsFromPdf(pdfUrl) {
+  if (!window.pdfjsLib) throw new Error('Не удалось загрузить модуль чтения PDF');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const response = await fetch(`/api/pdf?url=${encodeURIComponent(pdfUrl)}`);
+  if (!response.ok) throw new Error('Не удалось загрузить PDF из КАД');
+  const document = await pdfjsLib.getDocument({ data: new Uint8Array(await response.arrayBuffer()) }).promise;
+  const pages = await Promise.all(Array.from({ length: document.numPages }, async (_, index) => {
+    const content = await (await document.getPage(index + 1)).getTextContent();
+    return content.items.map((item) => item.str).join(' ');
+  }));
+  const text = pages.join('\n').replace(/\u00ad/g, ' ');
+  const marker = /Должнику\s*:\s*в\s+обязательном\s+порядке\s+представить\s*:/i.exec(text);
+  if (!marker) return { found: false, requirements: [] };
+  const tail = text.slice(marker.index + marker[0].length);
+  const stop = /\b(Неисполнение должником|Разъяснить сторонам|В силу ч\.|В соответствии со ст\.|Судья|Приложение)/i.exec(tail);
+  const section = (stop ? tail.slice(0, stop.index) : tail.slice(0, 6000)).replace(/\s+/g, ' ').trim();
+  const starts = [...section.matchAll(/(?<!\w)(?=в случае если заявление|представить платежный документ|представить заявление)/gi)].map((match) => match.index);
+  const points = starts.length ? [section.slice(0, starts[0]), ...starts.map((start, index) => section.slice(start, starts[index + 1]))] : [section];
+  const requirements = points.map((item) => item.replace(/\s+\d+\.$/, '').trim().replace(/^[;\-–\s]+|[;\-–\s]+$/g, '')).filter((item) => item.length > 8);
+  return { found: true, requirements };
 }
 
 async function loadCase(number) {
