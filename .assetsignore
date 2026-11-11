@@ -1,0 +1,13 @@
+.git/
+.gitignore
+.dev.vars.example
+.assetsignore
+README.md
+worker.js
+wrangler.jsonc
+functions/
+server.mjs
+server_py.py
+analyzer.py
+extract_requirements.py
+__pycache__/
