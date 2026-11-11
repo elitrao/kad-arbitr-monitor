@@ -7,3 +7,7 @@ __pycache__/
 *.py[cod]
 node_modules/
 .DS_Store
+services/parser_kad/data/
+services/parser_kad/logs/
+services/parser_kad/input/
+services/kad_http/__pycache__/

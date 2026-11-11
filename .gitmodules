@@ -1,0 +1,3 @@
+[submodule "services/parser_kad"]
+	path = services/parser_kad
+	url = https://github.com/MemphisAton/parser_kad.git

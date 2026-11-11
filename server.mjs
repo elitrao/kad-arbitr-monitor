@@ -7,11 +7,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const root = process.cwd();
-const key = process.env.PARSER_API_KEY;
+const kadServiceUrl = process.env.KAD_SERVICE_URL || 'http://127.0.0.1:4176';
 const deepseekKey = process.env.DEEPSEEK_API_KEY;
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const send = (res, code, body, type = 'application/json; charset=utf-8') => { res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' }); res.end(body); };
-const callApi = (path, params) => fetch(`https://parser-api.com/parser/arbitr_api/${path}?${new URLSearchParams({ key, ...params })}`);
 const execFileAsync = promisify(execFile);
 
 async function extractRequirements(pdfBuffer) {
@@ -24,18 +23,14 @@ async function extractRequirements(pdfBuffer) {
   } finally { await rm(directory, { recursive: true, force: true }); }
 }
 
-function normalize(raw, number) {
-  const c = raw.Cases?.[0]; if (!c) throw new Error('Дело не найдено в ответе API');
-  const instance = c.CaseInstances?.[0] || {}; const sourceEvents = instance.InstanceEvents || [];
-  const event = [...sourceEvents].reverse().find((item) => item.File) || (instance.File?.URL ? { File: instance.File.URL, Date: c.StartDate, EventContentTypeName: instance.File.Name } : null);
-  const hearing = c.CourtHearings?.[0];
+function normalizeDocuments(raw, number) {
+  const sourceEvents = raw.documents || [];
+  const event = sourceEvents.at(-1);
   return {
-    number: c.CaseNumber || number, court: instance.Court?.Name || c.Court, instance: instance.Name, state: instance.State || c.State,
-    plaintiffLabel: c.CaseType === 'Б' ? 'Кредитор (заявитель)' : 'Истец', respondentLabel: c.CaseType === 'Б' ? 'Должник' : 'Ответчик',
-    plaintiff: c.Plaintiffs?.map((x) => x.Name).join(', '), respondent: c.Respondents?.map((x) => x.Name).join(', '), judge: instance.Judges?.join(', '),
-    hearing: hearing ? `${hearing.Start || instance.State || 'Дата не указана'} · ${hearing.Location || ''}`.trim() : null,
-    act: event ? { title: event.EventContentTypeName || event.DecisionTypeName || 'Судебный акт', date: event.PublishDate || event.Date, pdfUrl: event.File, fileName: event.File?.split('/').pop() } : null,
-    events: sourceEvents.map((item) => ({ date: item.PublishDate || item.Date, title: item.EventContentTypeName || item.EventTypeName || 'Событие' }))
+    number, court: 'КАД Арбитр', instance: 'Информация из документов КАД', state: raw.from_cache ? 'Сохранённая информация' : 'Данные обновлены',
+    plaintiffLabel: 'Участники', respondentLabel: 'Данные карточки', plaintiff: '—', respondent: 'Будут добавлены отдельным маршрутом', judge: '—', hearing: null,
+    act: event ? { title: event.document_title || 'Судебный акт', date: event.document_date, pdfUrl: event.document_url, fileName: event.document_url?.split('/').pop() } : null,
+    events: sourceEvents.map((item) => ({ date: item.document_date, title: item.document_title || 'Судебный акт' }))
   };
 }
 
@@ -43,32 +38,24 @@ createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/api/case') {
-      if (!key) return send(res, 503, JSON.stringify({ error: 'Не задан PARSER_API_KEY на локальном сервере' }));
       const number = url.searchParams.get('number'); if (!number) return send(res, 400, JSON.stringify({ error: 'Укажите номер дела' }));
-      const upstream = await callApi('details_by_number', { CaseNumber: number }); const raw = await upstream.json();
-      if (!upstream.ok || !raw.Success) return send(res, upstream.status || 502, JSON.stringify({ error: raw.error || 'Ошибка Parser API' }));
-      return send(res, 200, JSON.stringify(normalize(raw, number)));
+      const upstream = await fetch(`${kadServiceUrl}/cases/${encodeURIComponent(number)}/documents`); const raw = await upstream.json();
+      if (!upstream.ok) return send(res, upstream.status || 502, JSON.stringify({ error: raw.error || 'Ошибка KAD HTTP service' }));
+      return send(res, 200, JSON.stringify(normalizeDocuments(raw, number)));
     }
     if (url.pathname === '/api/search') {
-      if (!key) return send(res, 503, JSON.stringify({ error: 'Не задан PARSER_API_KEY на локальном сервере' }));
-      const inn = url.searchParams.get('inn'); if (!/^\d{10}(\d{2})?$/.test(inn || '')) return send(res, 400, JSON.stringify({ error: 'Введите ИНН из 10 или 12 цифр' }));
-      const upstream = await callApi('search', { Inn: inn, InnType: 'Any' }); const raw = await upstream.json();
-      if (!upstream.ok || !raw.Success) return send(res, upstream.status || 502, JSON.stringify({ error: raw.error || 'Ошибка Parser API' }));
-      const cases = (raw.Cases || []).map((item) => ({ number: item.CaseNumber, court: item.Court, state: item.State || item.CaseType }));
-      return send(res, 200, JSON.stringify({ cases }));
+      return send(res, 501, JSON.stringify({ error: 'Поиск по ИНН пока не подключён: сервис работает по номеру дела.' }));
     }
     if (url.pathname === '/api/pdf') {
-      if (!key) return send(res, 503, 'Не задан PARSER_API_KEY', 'text/plain; charset=utf-8');
-      const pdfUrl = url.searchParams.get('url'); const raw = await (await callApi('pdf_download', { url: pdfUrl })).json();
-      if (!raw.Success || !raw.pdfContent) return send(res, 404, 'PDF не найден', 'text/plain; charset=utf-8');
-      const pdf = Buffer.from(raw.pdfContent, 'base64'); res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="court-act.pdf"' }); return res.end(pdf);
+      const pdfUrl = url.searchParams.get('url'); const upstream = await fetch(`${kadServiceUrl}/documents/download?${new URLSearchParams({ url: pdfUrl })}`);
+      if (!upstream.ok) return send(res, upstream.status, 'PDF не найден', 'text/plain; charset=utf-8');
+      const pdf = Buffer.from(await upstream.arrayBuffer()); res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="court-act.pdf"' }); return res.end(pdf);
     }
     if (url.pathname === '/api/analyze') {
-      if (!key) return send(res, 503, JSON.stringify({ error: 'Не задан PARSER_API_KEY на локальном сервере' }));
       const pdfUrl = url.searchParams.get('url'); if (!pdfUrl) return send(res, 400, JSON.stringify({ error: 'Не передан URL PDF' }));
-      const raw = await (await callApi('pdf_download', { url: pdfUrl })).json();
-      if (!raw.Success || !raw.pdfContent) return send(res, 404, JSON.stringify({ error: 'PDF не найден' }));
-      const analyzer = await fetch('http://127.0.0.1:4175', { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: Buffer.from(raw.pdfContent, 'base64') });
+      const pdf = await fetch(`${kadServiceUrl}/documents/download?${new URLSearchParams({ url: pdfUrl })}`);
+      if (!pdf.ok) return send(res, 404, JSON.stringify({ error: 'PDF не найден' }));
+      const analyzer = await fetch('http://127.0.0.1:4175', { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: Buffer.from(await pdf.arrayBuffer()) });
       return send(res, analyzer.status, await analyzer.text());
     }
     if (url.pathname === '/api/ai-requirements') {
